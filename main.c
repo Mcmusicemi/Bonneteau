@@ -7,7 +7,6 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-//#include <SDL2/SDL_ttf.h>
 
 /* Déclaration des variables / structures utilisées par le jeu */
 
@@ -58,11 +57,36 @@ void drawGame(void)
 {
     drawBackground();
 
+    drawBall();
+
     drawGlass();
+
+    if (game.animation == ECHEC)
+    {
+    	drawThumb();
+    }
 
     SDL_RenderPresent(getrenderer());
     
     SDL_Delay(1);
+}
+
+void drawThumb()
+{
+    drawImage(game.thumbTexture, glassD.position.x, game.thumbY);
+}
+
+void drawBall()
+{
+    if (game.animation != REVELATION)
+    {
+        game.positionBall.x = glassD.position.x + ((glassD.position.w - game.positionBall.w) / 2);
+        game.positionBall.y = glassD.position.y + glassD.position.h - game.positionBall.h;
+    }
+    else if (game.animation == REVELATION)
+    {
+        drawImage(game.ballTexture, game.positionBall.x, game.positionBall.y);
+    }
 }
 
 void drawGlass()
@@ -121,7 +145,7 @@ void delay(unsigned int frameLimit)
 }
 
 SDL_Texture *loadImage(char *name)
-    {      
+{      
         SDL_Surface *loadedImage = NULL;
         SDL_Texture *texture = NULL;
 
@@ -189,14 +213,6 @@ void init(char *title)
         printf( "SDL_image n'a pu être initialisée! SDL_image Error: %s\n", IMG_GetError() );
         exit(1);
     }
- 
-    /*//Initialisation de SDL_TTF 2
-
-    if (TTF_Init() < 0)
-    {
-        printf("Impossible d'initialiser SDL TTF: %s\n", TTF_GetError());
-        exit(1);
-    }*/
 
     //SDL_ShowCursor(SDL_DISABLE);
  
@@ -213,9 +229,6 @@ void cleanup()
     SDL_DestroyWindow(screen);
     screen = NULL;
  
-    //SDL_TTF 2
-    //TTF_Quit();
- 
     //SDL
     SDL_Quit();
 }
@@ -227,22 +240,28 @@ void loadGame()
     //Chargement des textures
     game.glassTexture = loadImage("div/glass.png");
     game.glassSelectedTexture = loadImage("div/glass_selected.png");
+    game.ballTexture = loadImage("div/ball.png");
+    game.thumbTexture = loadImage("div/thumb.png");
 
 
     //iniatilisation des variables
     game.animation = NONE;
 
+    game.firstTour = true;
+
     game.nbrTourMax = 2; //(+1 = 3)
 
     game.tour = 0;
 
-    game.spaceBetweenGlass = (SCREEN_WIDTH - (GLASS_WIDTH * NBR_GLASS)) / (NBR_GLASS + 1);
+    game.glassReveal = 0;
+
+    int spaceBetweenGlass = (SCREEN_WIDTH - (GLASS_WIDTH * NBR_GLASS)) / (NBR_GLASS + 1);
 
     glassU.position.y = glassD.position.y = glassT.position.y = (SCREEN_HEIGHT - GLASS_HEIGHT) / 2;
-    glassU.position.x = (SCREEN_WIDTH - ((GLASS_WIDTH * NBR_GLASS) + ((NBR_GLASS - 1) * game.spaceBetweenGlass))) / 2 ;
+    glassU.position.x = (SCREEN_WIDTH - ((GLASS_WIDTH * NBR_GLASS) + ((NBR_GLASS - 1) * spaceBetweenGlass))) / 2 ;
 
-    glassD.position.x = glassU.position.x + GLASS_WIDTH + game.spaceBetweenGlass;
-    glassT.position.x = glassD.position.x + GLASS_WIDTH + game.spaceBetweenGlass;
+    glassD.position.x = glassU.position.x + GLASS_WIDTH + spaceBetweenGlass;
+    glassT.position.x = glassD.position.x + GLASS_WIDTH + spaceBetweenGlass;
 
     glassU.dest = glassD.dest = glassT.dest = 0;
 
@@ -250,9 +269,15 @@ void loadGame()
     glassU.position.h = glassD.position.h = glassT.position.h = GLASS_HEIGHT;
 
     glassU.goToTop = glassD.goToTop = glassT.goToTop = false;
+    game.goToBottom = false;
+
+    game.positionBall.w = game.positionBall.h = 128;
+	game.thumbY = -128;    
 
     //final
     drawGame();
+
+    etablishedReveal(2);
 }
  
  
@@ -278,15 +303,15 @@ void getInput(Input *input)
                         exit(0);
                     break;
                     
-                    case SDLK_SPACE:
-                        if (game.animation == NONE)
+                    /*case SDLK_SPACE:
+                        if (game.animation == NONE && game.firstTour == true)
                         {
                             enableAnimation();
                             changeGlass();
                         }
 
                     default:
-                    break;
+                    break;*/
                 }
             break;
 
@@ -298,18 +323,50 @@ void getInput(Input *input)
                     glassD.selected = testBelonging(event.motion.x, event.motion.y, glassD.position);
                     glassT.selected = testBelonging(event.motion.x, event.motion.y, glassT.position);
                 }
-           
 
+            break;
+
+            case SDL_MOUSEBUTTONUP:
+
+                if (event.button.button == SDL_BUTTON_LEFT)
+                {
+                    if (game.animation ==  NONE && game.firstTour == false)
+                    {
+                        if (testBelonging(event.button.x, event.button.y, glassU.position))
+                        {
+                            etablishedReveal(1);
+                        }
+                        else if (testBelonging(event.button.x, event.button.y, glassD.position))
+                        {
+                            etablishedReveal(2);
+                        }
+                        else if (testBelonging(event.button.x, event.button.y, glassT.position))
+                        {
+                            etablishedReveal(3);
+                        }
+                    }
+                }
             break;
         }
  
     }
 }
 
+void etablishedReveal(int glass)
+{
+    game.glassReveal = glass;
+    game.animation = REVELATION;
+}
+
 void pastRound()
 {
     if (game.tour == game.nbrTourMax)
     {
+        if (game.firstTour == true)
+        {
+            game.firstTour = false;
+        }
+
         game.tour = 0;
         game.nbrTourMax++;
         enableAnimation();
@@ -336,178 +393,259 @@ void updateGlass()
     int hauteurMax = 112 - GLASS_HEIGHT;
     int hauteurMin = 112 + GLASS_HEIGHT;
     int baseY = 112;
+    int bas = SCREEN_HEIGHT;
 
-    //Glass 1
+    //CHANGEGLASS
 
-    //en haut
-    if (glassU.goToTop == true && glassU.position.y > hauteurMax && glassU.dest != 0)
+    if (game.animation == ChangeGlass)
     {
-        moveGlass(1, &glassU.position.x, &glassU.position.y, &hauteurMax);
-    }
-    
-    //en bas
-    if (glassU.goToTop == false && glassU.position.y < hauteurMin && glassU.dest != 0)
-    {
-        moveGlass(2, &glassU.position.x, &glassU.position.y, &hauteurMin);
-    }
+        //Glass 1
 
-    //sur le cote
-    if (glassU.position.y == hauteurMax || glassU.position.y == hauteurMin)
-    {
-        if (glassU.dest != 0)
+        //en haut
+        if (glassU.goToTop == true && glassU.position.y > hauteurMax && glassU.dest != 0)
         {
-            if (glassU.dest < 0)
-            {
-                moveGlass(4, &glassU.position.x, &glassU.position.y, &glassU.dest);
-            }
-            else if (glassU.dest > 0)
-            {
-                moveGlass(3, &glassU.position.x, &glassU.position.y, &glassU.dest);
-            }
+            moveGlass(HAUT, &glassU.position.x, &glassU.position.y, &hauteurMax);
         }
-    }
-
-    //remise en position
-    if (glassU.position.y >= hauteurMax || glassU.position.y <= hauteurMin)
-    {
-        if (glassU.dest == 0)
+        
+        //en bas
+        if (glassU.goToTop == false && glassU.position.y < hauteurMin && glassU.dest != 0)
         {
-            if (glassU.goToTop ==  true)
+            moveGlass(BAS, &glassU.position.x, &glassU.position.y, &hauteurMin);
+        }
+
+        //sur le cote
+        if (glassU.position.y == hauteurMax || glassU.position.y == hauteurMin)
+        {
+            if (glassU.dest != 0)
             {
-                moveGlass(2, &glassU.position.x, &glassU.position.y, &baseY);
-                if (glassU.position.y == baseY)
+                if (glassU.dest < 0)
                 {
-                    glassU.goToTop = false;
-                    pastRound();
+                    moveGlass(GAUCHE, &glassU.position.x, &glassU.position.y, &glassU.dest);
+                }
+                else if (glassU.dest > 0)
+                {
+                    moveGlass(DROITE, &glassU.position.x, &glassU.position.y, &glassU.dest);
                 }
             }
-            else
-            {
-                moveGlass(1, &glassU.position.x, &glassU.position.y, &baseY);
-            }
         }
-    }
 
-
-    //Glass 2
-
-    //en haut
-    if (glassD.goToTop == true && glassD.position.y > hauteurMax && glassD.dest != 0)
-    {
-        moveGlass(1, &glassD.position.x, &glassD.position.y, &hauteurMax);
-    }
-    
-    //en bas
-    if (glassD.goToTop == false && glassD.position.y < hauteurMin && glassD.dest != 0)
-    {
-        moveGlass(2, &glassD.position.x, &glassD.position.y, &hauteurMin);
-    }
-
-    //sur le cote
-    if (glassD.position.y == hauteurMax || glassD.position.y == hauteurMin)
-    {
-        if (glassD.dest != 0)
+        //remise en position
+        if (glassU.position.y >= hauteurMax || glassU.position.y <= hauteurMin)
         {
-            if (glassD.dest < 0)
+            if (glassU.dest == 0)
             {
-                moveGlass(4, &glassD.position.x, &glassD.position.y, &glassD.dest);
-            }
-            else if (glassD.dest > 0)
-            {
-                moveGlass(3, &glassD.position.x, &glassD.position.y, &glassD.dest);
-            }
-        }
-    }
-
-    //remise en position
-    if (glassD.position.y >= hauteurMax || glassD.position.y <= hauteurMin)
-    {
-        if (glassD.dest == 0)
-        {
-            if (glassD.goToTop ==  true)
-            {
-                moveGlass(2, &glassD.position.x, &glassD.position.y, &baseY);
-                if (glassD.position.y == baseY)
+                if (glassU.goToTop ==  true)
                 {
-                    glassD.goToTop = false;
-                    pastRound();
+                    moveGlass(BAS, &glassU.position.x, &glassU.position.y, &baseY);
+                    if (glassU.position.y == baseY)
+                    {
+                        glassU.goToTop = false;
+                        pastRound();
+                    }
+                }
+                else
+                {
+                    moveGlass(HAUT, &glassU.position.x, &glassU.position.y, &baseY);
                 }
             }
-            else
-            {
-                moveGlass(1, &glassD.position.x, &glassD.position.y, &baseY);
-            }
         }
-    }
 
 
+        //Glass 2
 
-    //Glass 3
-
-    //en haut
-    if (glassT.goToTop == true && glassT.position.y > hauteurMax && glassT.dest != 0)
-    {
-        moveGlass(1, &glassT.position.x, &glassT.position.y, &hauteurMax);
-    }
-    
-    //en bas
-    if (glassT.goToTop == false && glassT.position.y < hauteurMin && glassT.dest != 0)
-    {
-        moveGlass(2, &glassT.position.x, &glassT.position.y, &hauteurMin);
-    }
-
-    //sur le cote
-    if (glassT.position.y == hauteurMax || glassT.position.y == hauteurMin)
-    {
-        if (glassT.dest != 0)
+        //en haut
+        if (glassD.goToTop == true && glassD.position.y > hauteurMax && glassD.dest != 0)
         {
-            if (glassT.dest < 0)
-            {
-                moveGlass(4, &glassT.position.x, &glassT.position.y, &glassT.dest);
-            }
-            else if (glassT.dest > 0)
-            {
-                moveGlass(3, &glassT.position.x, &glassT.position.y, &glassT.dest);
-            }
+            moveGlass(HAUT, &glassD.position.x, &glassD.position.y, &hauteurMax);
         }
-    }
-
-    //remise en position
-    if (glassT.position.y >= hauteurMax || glassT.position.y <= hauteurMin)
-    {
-        if (glassT.dest == 0)
+        
+        //en bas
+        if (glassD.goToTop == false && glassD.position.y < hauteurMin && glassD.dest != 0)
         {
-            if (glassT.goToTop ==  true)
+            moveGlass(BAS, &glassD.position.x, &glassD.position.y, &hauteurMin);
+        }
+
+        //sur le cote
+        if (glassD.position.y == hauteurMax || glassD.position.y == hauteurMin)
+        {
+            if (glassD.dest != 0)
             {
-                moveGlass(2, &glassT.position.x, &glassT.position.y, &baseY);
-                if (glassT.position.y == baseY)
+                if (glassD.dest < 0)
                 {
-                    glassT.goToTop = false;
-                    pastRound();
+                    moveGlass(GAUCHE, &glassD.position.x, &glassD.position.y, &glassD.dest);
+                }
+                else if (glassD.dest > 0)
+                {
+                    moveGlass(DROITE, &glassD.position.x, &glassD.position.y, &glassD.dest);
                 }
             }
-            else
+        }
+
+        //remise en position
+        if (glassD.position.y >= hauteurMax || glassD.position.y <= hauteurMin)
+        {
+            if (glassD.dest == 0)
             {
-                moveGlass(1, &glassT.position.x, &glassT.position.y, &baseY);
+                if (glassD.goToTop ==  true)
+                {
+                    moveGlass(BAS, &glassD.position.x, &glassD.position.y, &baseY);
+                    if (glassD.position.y == baseY)
+                    {
+                        glassD.goToTop = false;
+                        pastRound();
+                    }
+                }
+                else
+                {
+                    moveGlass(HAUT, &glassD.position.x, &glassD.position.y, &baseY);
+                }
+            }
+        }
+
+
+
+        //Glass 3
+
+        //en haut
+        if (glassT.goToTop == true && glassT.position.y > hauteurMax && glassT.dest != 0)
+        {
+            moveGlass(HAUT, &glassT.position.x, &glassT.position.y, &hauteurMax);
+        }
+        
+        //en bas
+        if (glassT.goToTop == false && glassT.position.y < hauteurMin && glassT.dest != 0)
+        {
+            moveGlass(BAS, &glassT.position.x, &glassT.position.y, &hauteurMin);
+        }
+
+        //sur le cote
+        if (glassT.position.y == hauteurMax || glassT.position.y == hauteurMin)
+        {
+            if (glassT.dest != 0)
+            {
+                if (glassT.dest < 0)
+                {
+                    moveGlass(GAUCHE, &glassT.position.x, &glassT.position.y, &glassT.dest);
+                }
+                else if (glassT.dest > 0)
+                {
+                    moveGlass(DROITE, &glassT.position.x, &glassT.position.y, &glassT.dest);
+                }
+            }
+        }
+
+        //remise en position
+        if (glassT.position.y >= hauteurMax || glassT.position.y <= hauteurMin)
+        {
+            if (glassT.dest == 0)
+            {
+                if (glassT.goToTop ==  true)
+                {
+                    moveGlass(BAS, &glassT.position.x, &glassT.position.y, &baseY);
+                    if (glassT.position.y == baseY)
+                    {
+                        glassT.goToTop = false;
+                        pastRound();
+                    }
+                }
+                else
+                {
+                    moveGlass(HAUT, &glassT.position.x, &glassT.position.y, &baseY);
+                }
             }
         }
     }
 
+
+
+    //REVELATION
+
+    else if (game.animation == REVELATION)
+    {
+        if (game.goToBottom == true)
+        {
+            if (glassU.position.y < baseY)
+            {
+                moveGlass(BAS, &glassU.position.x, & glassU.position.y, &baseY);
+            }
+            else if (glassD.position.y < baseY)
+            {
+                moveGlass(BAS, &glassD.position.x, & glassD.position.y, &baseY);
+            }
+            else if (glassT.position.y < baseY)
+            {
+                moveGlass(BAS, &glassT.position.x, & glassT.position.y, &baseY);
+            }
+
+
+            if (glassU.position.y == baseY && glassD.position.y == baseY && glassT.position.y == baseY)
+            {
+                if (game.glassReveal == 2)
+                {
+                    game.goToBottom = false;
+                    enableAnimation();
+                    changeGlass();
+                }
+                else
+                {
+                    game.animation = ECHEC;
+                }
+            }
+        }
+        //Glass 1
+        else if (game.glassReveal == 1)
+        {
+            if (glassU.position.y > hauteurMax)
+            {
+                moveGlass(HAUT, &glassU.position.x, &glassU.position.y, &hauteurMax);
+            }
+        }
+        //Glass 2
+        else if (game.glassReveal ==  2)
+        {
+            if (glassD.position.y > hauteurMax)
+            {
+                moveGlass(HAUT, &glassD.position.x, &glassD.position.y, &hauteurMax);
+            }
+        }
+        //Glass 3
+        else if (game.glassReveal == 3)
+        {
+            if (glassT.position.y > hauteurMax)
+            {
+                moveGlass(HAUT, &glassT.position.x, &glassT.position.y, &hauteurMax);
+            }
+        }
+
+
+        if (glassU.position.y == hauteurMax || glassD.position.y == hauteurMax || glassT.position.y == hauteurMax)
+        {
+            game.goToBottom = true;
+            SDL_Delay(500);
+        }
+
+    }
+
+    // ECHEC
+    else if (game.animation == ECHEC)
+    {
+        moveGlass(BAS, &glassU.position.x, &glassU.position.y, &bas);
+        moveGlass(BAS, &glassD.position.x, &glassD.position.y, &bas);
+        moveGlass(BAS, &glassT.position.x, &glassT.position.y, &bas);
+
+		moveGlass(BAS, &baseY, &game.thumbY, &baseY);
+		//1er &baseY ne sert à rien c'est seulement pour mettre une variable
+    }
 
 }
 
-void moveGlass(int direction, int *x, int *y, int *distanceMax)
+void moveGlass(Direction direction, int *x, int *y, int *distanceMax)
 {
-    /*1: haut
-    2: bas
-    3: droite
-    4: gauche*/
-
     //permet de controler le choix de la vitesse
 
     switch(direction)
     {
-        case 1:
+        case HAUT:
             if (*y - GLASS_SPEED < *distanceMax)
             {
                 *y = *distanceMax;
@@ -518,7 +656,7 @@ void moveGlass(int direction, int *x, int *y, int *distanceMax)
             }
         break;
 
-        case 2:
+        case BAS:
             if (*y + GLASS_SPEED > *distanceMax)
             {
                 *y = *distanceMax;
@@ -529,7 +667,7 @@ void moveGlass(int direction, int *x, int *y, int *distanceMax)
             }
         break;
 
-        case 3:
+        case DROITE:
             if (*distanceMax - GLASS_SPEED < 0)
             {
                 *x += *distanceMax;
@@ -542,7 +680,7 @@ void moveGlass(int direction, int *x, int *y, int *distanceMax)
             }
         break;
 
-        case 4:
+        case GAUCHE:
             if (*distanceMax + GLASS_SPEED > 0)
             {
                 *x += *distanceMax;

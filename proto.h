@@ -16,12 +16,15 @@ extern void updateGame();
 extern void drawBackground();
 extern void drawGlass();
 extern void changeGlass();
-extern void moveGlass(int direction, int *x, int *y, int *distanceMax);
+extern void moveGlass(Direction direction, int *x, int *y, int *distanceMax);
 extern void generate2NumbersRandom(int *a, int *b);
 extern int randint(int a, int b);
 extern void updateGlass();
 extern void enableAnimation();
 extern void pastRound();
 extern bool testBelonging(int mouseX, int mouseY, SDL_Rect box);
+extern void etablishedReveal(int glass);
+extern void drawBall();
+extern void drawThumb();
 
 #endif

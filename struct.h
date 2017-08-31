@@ -7,8 +7,11 @@ typedef int bool;
 #define true 1
 #define false 0
 
+typedef enum Direction Direction;
+enum Direction {HAUT, BAS, DROITE, GAUCHE};
+
 typedef enum Animation Animation;
-enum Animation {NONE, ChangeGlass, REVELATION};
+enum Animation {NONE, ChangeGlass, REVELATION, ECHEC};
 
 //Gestion de l'input du clavier
 typedef struct Input
@@ -34,12 +37,21 @@ typedef struct Game
 {
 	SDL_Texture *glassTexture;
 	SDL_Texture *glassSelectedTexture;
+	SDL_Texture *ballTexture;
+	SDL_Texture *thumbTexture;
+
+	SDL_Rect positionBall;
+	int thumbY;
+
+	bool firstTour;
+
+	bool goToBottom;
 
 	int nbrTourMax, tour;
 
-	Animation animation; 
+	Animation animation;
 
-	int spaceBetweenGlass; 
+	int glassReveal; 
 
 } Game;
 
